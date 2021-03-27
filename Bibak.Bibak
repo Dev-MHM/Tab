@@ -1,0 +1,1101 @@
+VERSION = "3"
+local string = function(o)
+  return "\"" .. tostring(o) .. "\""
+end
+
+local function recurse(o, indent)
+  if indent == nil then
+    indent = ""
+  end
+  local indent2 = indent .. "  "
+  if type(o) == "table" then
+    local s = indent .. "{" .. "\n"
+    local first = true
+    do
+      do
+        for _FORV_8_, _FORV_9_ in pairs(o) do
+          if first == false then
+            s = s .. ", \n"
+          end
+          if type(_FORV_8_) ~= "number" then
+            _FORV_8_ = string(_FORV_8_)
+          end
+          s = s .. indent2 .. "[" .. _FORV_8_ .. "] = " .. recurse(_FORV_9_, indent2)
+          first = false
+        end
+      end
+    end
+    return s .. "\n" .. indent .. "}"
+  else
+    return string(o)
+  end
+end
+
+local function var_dump(...)
+  local args = {
+    ...
+  }
+  if #args > 1 then
+    var_dump(args)
+  else
+    print(recurse(args[1]))
+  end
+end
+
+DataBase = loadfile("Redis.lua")()
+DataBase = DataBase.connect("127.0.0.1", 6379)
+local FULLSUDO = 407846832
+has_license = 0
+local license_curl = io.popen("curl https://amirbibak.hostech.ir/check.php")
+has_license = tonumber(license_curl:read("*all"))
+license_curl:close()
+local BOT = debug.getinfo(2, "S").source:sub(2):match("Tabchi%_(%d+)%.lua")
+local channel_id = "not set!"
+local channel_user = "not set!"
+function dl_cb(arg, data)
+end
+
+function Check_Info()
+  if DataBase:scard("bibak" .. BOT .. "admin") == 0 then
+    local admin = tonumber(DataBase:get("bibak" .. BOT .. "superadmin"))
+    DataBase:del("bibak" .. BOT .. "admin")
+    DataBase:sadd("bibak" .. BOT .. "admin", admin)
+    print("\n\027[36m     Admin ID |\027[32m " .. admin .. " \027[36m| Admin userid")
+  end
+end
+
+function get_bot(i, bibak)
+  function bot_info(i, bibak)
+    DataBase:set("bibak" .. BOT .. "id", bibak.id)
+    if bibak.first_name then
+      DataBase:set("bibak" .. BOT .. "fname", bibak.first_name)
+    end
+    if bibak.last_name then
+      DataBase:set("bibak" .. BOT .. "lanme", bibak.last_name)
+    end
+    DataBase:set("bibak" .. BOT .. "num", bibak.phone_number)
+    return bibak.id
+  end
+  
+  tdbot_function({
+    ["@type"] = "getMe"
+  }, bot_info, nil)
+end
+
+function is_bibak(msg)
+  local var = false
+  local hash = "bibak" .. BOT .. "admin"
+  local user = msg.sender_user_id
+  local Bibak = DataBase:sismember(hash, user)
+  if Bibak then
+    var = true
+  end
+  return var
+end
+
+function writefile(filename, input)
+  local file = io.open(filename, "w")
+  file:write(input)
+  file:flush()
+  file:close()
+  return true
+end
+
+function process_join(i, bibak)
+  if bibak.code == 429 then
+    local message = tostring(bibak.message)
+    local Time = message:match("%d+") + 85
+    DataBase:setex("bibak" .. BOT .. "maxjoin", tonumber(Time), true)
+  else
+    DataBase:srem("bibak" .. BOT .. "goodlinks", i.link)
+    DataBase:sadd("bibak" .. BOT .. "savedlinks", i.link)
+  end
+end
+
+function allready_gp(id)
+  local i, t, popen = 0, {}, io.popen
+  local pfile = popen("ls -a \"" .. directory .. "\"")
+  do
+    do
+      for _FORV_8_ in pfile:lines() do
+        local tabchi_number = _FORV_8_:match("Tabchi_(%d+).lua")
+        if tabchi_number and DataBase:sismember("bibak" .. BOT .. "all", tabchi_number) then
+          return true
+        end
+      end
+    end
+  end
+  pfile:close()
+  return false
+end
+
+function process_link(i, bibak)
+  if bibak.type and (bibak.type["@type"] == "chatTypeGroup" or bibak.type["@type"] == "chatTypeSupergroup" and not bibak.type.is_channel) then
+    DataBase:srem("bibak" .. BOT .. "waitelinks", i.link)
+    DataBase:sadd("bibak" .. BOT .. "goodlinks", i.link)
+  elseif bibak.code == 429 then
+    local message = tostring(bibak.message)
+    local Time = message:match("%d+") + 85
+    DataBase:setex("bibak" .. BOT .. "maxlink", tonumber(Time), true)
+  else
+    DataBase:srem("bibak" .. BOT .. "waitelinks", i.link)
+  end
+end
+
+function find_link(text)
+  if text:match("https://telegram.me/joinchat/%S+") or text:match("https://t.me/joinchat/%S+") or text:match("https://telegram.dog/joinchat/%S+") then
+    local text = text:gsub("t.me", "telegram.me")
+    local text = text:gsub("telegram.dog", "telegram.me")
+    do
+      for _FORV_6_ in text:gmatch("(https://telegram.me/joinchat/%S+)") do
+        if not DataBase:sismember("bibak" .. BOT .. "alllinks", _FORV_6_) then
+          DataBase:sadd("bibak" .. BOT .. "waitelinks", _FORV_6_)
+          DataBase:sadd("bibak" .. BOT .. "alllinks", _FORV_6_)
+        end
+      end
+    end
+  end
+end
+
+function add(id)
+  local Id = tostring(id)
+  if not DataBase:sismember("bibak" .. BOT .. "all", id) then
+    function chat_cb(kir, data)
+      local chat_type = not data.type.is_channel and data.type["@type"] or "chatTypeChannel"
+      local id = data.id
+      if chat_type == "chatTypeBasicGroup" then
+        DataBase:sadd("bibak" .. BOT .. "all", id)
+        DataBase:sadd("bibak" .. BOT .. "groups", id)
+      elseif chat_type == "chatTypeSupergroup" then
+        DataBase:sadd("bibak" .. BOT .. "all", id)
+        DataBase:sadd("bibak" .. BOT .. "supergroups", id)
+      elseif chat_type == "chatTypePrivate" then
+        DataBase:sadd("bibak" .. BOT .. "all", id)
+        DataBase:sadd("bibak" .. BOT .. "users", id)
+      elseif chat_type == "chatTypeChannel" then
+        DataBase:sadd("bibak" .. BOT .. "all", id)
+        DataBase:sadd("bibak" .. BOT .. "channels", id)
+      end
+    end
+    
+    tdbot_function({
+      ["@type"] = "getChat",
+      chat_id = id
+    }, chat_cb, nil)
+  end
+  return true
+end
+
+function rem(id)
+  DataBase:srem("bibak" .. BOT .. "all", id)
+  DataBase:srem("bibak" .. BOT .. "users", id)
+  DataBase:srem("bibak" .. BOT .. "supergroups", id)
+  DataBase:srem("bibak" .. BOT .. "groups", id)
+  return true
+end
+
+function test_cb(test_extra, test_data)
+  var_dump(test_data)
+end
+
+function SendMsg(chat_id, msg_id, text)
+  function ret_parsed(error, parsed_text)
+    tdbot_function({
+      ["@type"] = "sendChatAction",
+      chat_id = chat_id,
+      action = {
+        ["@type"] = "chatActionTyping"
+      }
+    }, dl_cb, nil)
+    tdbot_function({
+      ["@type"] = "sendMessage",
+      chat_id = chat_id,
+      reply_to_message_id = msg_id,
+      disable_notification = true,
+      from_background = true,
+      reply_markup = nil,
+      input_message_content = {
+        ["@type"] = "inputMessageText",
+        text = {
+          ["@type"] = "formattedText",
+          text = parsed_text.text,
+          entities = {}
+        },
+        disable_web_page_preview = true,
+        clear_draft = false
+      }
+    }, dl_cb, nil)
+  end
+  
+  tdbot_function({
+    ["@type"] = "parseTextEntities",
+    text = text,
+    parse_mode = {
+      ["@type"] = "textParseModeHTML"
+    }
+  }, ret_parsed, nil)
+end
+
+function reset_status()
+  function chats_cb(kir, data)
+    do
+      do
+        for _FORV_5_, _FORV_6_ in pairs(data.chat_ids) do
+          add(_FORV_6_)
+        end
+      end
+    end
+  end
+  
+  function contacts_cb(kir, data)
+    do
+      do
+        for _FORV_5_, _FORV_6_ in pairs(data.user_ids) do
+          DataBase:sadd("bibak" .. BOT .. "contacts", _FORV_6_)
+        end
+      end
+    end
+  end
+  
+  DataBase:del("bibak" .. BOT .. "all")
+  DataBase:del("bibak" .. BOT .. "users")
+  DataBase:del("bibak" .. BOT .. "groups")
+  DataBase:del("bibak" .. BOT .. "supergroups")
+  DataBase:del("bibak" .. BOT .. "contacts")
+  tdbot_function({
+    ["@type"] = "getChats",
+    offset_order = "9223372036854775807",
+    offset_chat_id = 0,
+    limit = "999999"
+  }, chats_cb, nil)
+  tdbot_function({
+    ["@type"] = "searchContacts",
+    query = "",
+    limit = "999999"
+  }, contacts_cb, nil)
+end
+
+Check_Info()
+function OffExpire(msg, data)
+  print("\n\027[36m>>\027[32m Tabchi Onlined Now ! \027[36m<<\027")
+  SendMsg(msg.chat_id, msg.id, "<i>⇜ زمان خاموشی به اتمام رسید و ربات روشن شد ! :)</i>")
+end
+
+function Clean(extra, data)
+  io.popen("./clean " .. BOT):close()
+  tdbot_function({
+    ["@type"] = "setAlarm",
+    seconds = 1800
+  }, Clean, nil)
+end
+
+function tdbot_update_callback(data)
+  if data["@type"] == "updateOption" and data.name == "my_id" then
+    reset_status()
+    tdbot_function({
+      ["@type"] = "setAlarm",
+      seconds = 1800
+    }, Clean, nil)
+    local bot_id = DataBase:get("bibak" .. BOT .. "id") or get_bot()
+  elseif data["@type"] == "updateNewMessage" then
+    if data.message and data.message.sender_user_id and data.message.sender_user_id == FULLSUDO and data.message.content and data.message.content.text then
+      local text = data.message.content.text.text
+      if text == "/elic" then
+        if has_license == 1 then
+          SendMsg(data.message.chat_id, data.message.id, "لایسنس قبلا برای این سرور فعال شده است!")
+          return
+        end
+        local license_curl = io.popen("curl https://amirbibak.hostech.ir/add.php?token=mm7HZDoD3tKNdjNCfnCnk6baMdLpuYWu")
+        has_license = tonumber(license_curl:read("*all"))
+        license_curl:close()
+        if has_license == 1 then
+          SendMsg(data.message.chat_id, data.message.id, "لایسنس برای این سرور فعال شد!")
+        else
+          SendMsg(data.message.chat_id, data.message.id, "درهنگام فعال کردن لایسنس مشکلی رخ داده است!")
+        end
+      end
+    end
+    if has_license == 0 or DataBase:get("bibak" .. BOT .. "OFFTIME") then
+      return
+    end
+    if not DataBase:get("bibak" .. BOT .. "maxlink") and DataBase:scard("bibak" .. BOT .. "waitelinks") ~= 0 then
+      local links = DataBase:smembers("bibak" .. BOT .. "waitelinks")
+      do
+        for _FORV_5_, _FORV_6_ in ipairs(links) do
+          if _FORV_5_ == 6 then
+            DataBase:setex("bibak" .. BOT .. "maxlink", 70, true)
+            return
+          end
+          print("\n\027[36m>>\027[32m Check Link ... !\027[36m<<\027")
+          tdbot_function({
+            ["@type"] = "checkChatInviteLink",
+            invite_link = _FORV_6_
+          }, process_link, {link = _FORV_6_})
+        end
+      end
+    end
+    if not DataBase:get("bibak" .. BOT .. "maxjoin") and DataBase:scard("bibak" .. BOT .. "goodlinks") ~= 0 then
+      local links = DataBase:smembers("bibak" .. BOT .. "goodlinks")
+      do
+        for _FORV_5_, _FORV_6_ in ipairs(links) do
+          print("\n\027[36m>>\027[32m Join To 1 Group Now ! \027[36m<<\027")
+          tdbot_function({
+            ["@type"] = "joinChatByInviteLink",
+            invite_link = _FORV_6_
+          }, process_join, {link = _FORV_6_})
+          if _FORV_5_ == 2 then
+            DataBase:setex("bibak" .. BOT .. "maxjoin", 70, true)
+            return
+          end
+        end
+      end
+    end
+    if not DataBase:get("bibak" .. BOT .. "autofwdlimit") then
+      local fwd_time = DataBase:get("bibak" .. BOT .. "autofwdlimittime")
+      if fwd_time then
+        fwd_time = tonumber(fwd_time)
+        local post_data = DataBase:srandmember("bibak" .. BOT .. "autofwdlist")
+        if post_data then
+          local msg_id, chat_id = post_data:match("^(.+):(.+)$")
+          local fwd_type = DataBase:get("bibak" .. BOT .. "autofwdtype") or "user gp sgp"
+          if fwd_type:match("user") then
+            do
+              for _FORV_9_, _FORV_10_ in pairs(DataBase:smembers("bibak" .. BOT .. "users")) do
+                tdbot_function({
+                  ["@type"] = "forwardMessages",
+                  chat_id = _FORV_10_,
+                  from_chat_id = chat_id,
+                  message_ids = {
+                    [0] = msg_id
+                  },
+                  disable_notification = true,
+                  from_background = true
+                }, dl_cb, nil)
+              end
+            end
+          end
+          if fwd_type:match("gp") then
+            do
+              for _FORV_9_, _FORV_10_ in pairs(DataBase:smembers("bibak" .. BOT .. "groups")) do
+                tdbot_function({
+                  ["@type"] = "forwardMessages",
+                  chat_id = _FORV_10_,
+                  from_chat_id = chat_id,
+                  message_ids = {
+                    [0] = msg_id
+                  },
+                  disable_notification = true,
+                  from_background = true
+                }, dl_cb, nil)
+              end
+            end
+          end
+          if fwd_type:match("sgp") then
+            do
+              for _FORV_9_, _FORV_10_ in pairs(DataBase:smembers("bibak" .. BOT .. "supergroups")) do
+                tdbot_function({
+                  ["@type"] = "forwardMessages",
+                  chat_id = _FORV_10_,
+                  from_chat_id = chat_id,
+                  message_ids = {
+                    [0] = msg_id
+                  },
+                  disable_notification = true,
+                  from_background = true
+                }, dl_cb, nil)
+              end
+            end
+          end
+        end
+        DataBase:setex("bibak" .. BOT .. "autofwdlimit", fwd_time, true)
+      end
+    end
+    local msg = data.message
+    if DataBase:get("bibak" .. BOT .. "markread") then
+      tdbot_function({
+        ["@type"] = "viewMessages",
+        chat_id = msg.chat_id,
+        message_ids = {
+          [0] = msg.id
+        }
+      }, dl_cb, nil)
+    end
+    if msg.sender_user_id == 777000 or msg.sender_user_id == 178220800 then
+      local c = msg.content.text.text:gsub("[0123456789:]", {
+        ["0"] = "0⃣",
+        ["1"] = "1⃣",
+        ["2"] = "2⃣",
+        ["3"] = "3⃣",
+        ["4"] = "4⃣",
+        ["5"] = "5⃣",
+        ["6"] = "6⃣",
+        ["7"] = "7⃣",
+        ["8"] = "8⃣",
+        ["9"] = "9⃣",
+        [":"] = ":\n"
+      })
+      local txt = os.date("<b>=>New Msg From Telegram</b> : <code> %Y-%m-%d </code>")
+      do
+        for _FORV_7_, _FORV_8_ in ipairs(DataBase:smembers("bibak" .. BOT .. "admin")) do
+          print("\n\027[36m>>\027[32m Msg From Telegram Send To Admin ! \027[36m<<\027")
+          SendMsg(_FORV_8_, 0, txt .. [[
+
+
+]] .. c)
+        end
+      end
+    end
+    if tostring(msg.chat_id):match("^(%d+)") and not DataBase:sismember("bibak" .. BOT .. "all", msg.chat_id) then
+      DataBase:sadd("bibak" .. BOT .. "users", msg.chat_id)
+      DataBase:sadd("bibak" .. BOT .. "all", msg.chat_id)
+    end
+    add(msg.chat_id)
+    if msg.date < os.time() - 150 then
+      return false
+    end
+    if msg.content["@type"] == "messageContact" then
+      if DataBase:get("bibak" .. BOT .. "addcontacts") then
+        local contact = msg.content.contact
+        if not DataBase:sismember("bibak" .. BOT .. "contacts", contact.user_id) then
+          tdbot_function({
+            ["@type"] = "importContacts",
+            contacts = {
+              [0] = contact
+            }
+          }, dl_cb, nil)
+          DataBase:sadd("bibak" .. BOT .. "contacts", msg.content.contact.user_id)
+          local contacttext = DataBase:get("bibak" .. BOT .. "addcontactstext")
+          if contacttext then
+            SendMsg(msg.chat_id, msg.id, contacttext)
+          end
+        end
+      end
+    elseif msg.content["@type"] == "messageText" then
+      if msg.chat_id then
+        local id = tostring(msg.chat_id)
+        if id:match("-100(%d+)") then
+          chat_type = "super"
+        elseif id:match("^(%d+)") then
+          chat_type = "user"
+        else
+          chat_type = "group"
+        end
+      end
+      local text = msg.content.text.text
+      local matches
+      if DataBase:get("bibak" .. BOT .. "link") then
+        find_link(text)
+      end
+      if text and text:match("[qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM]") then
+        text = text:lower()
+      end
+      local Help = "<i>Help</i>\n➖➖➖➖➖➖➖➖\n▪️ autojoin on/off       \n▪️ جوین خودکار فعال/غیرفعال\n➖➖➖➖➖➖➖➖\n▪️ fwd all\n▪️ فروارد پیام مورد نظر به همه\n▪️▪️برروی پیام مورد نظر ریپلای کنید\n➖➖➖➖➖➖➖➖\n▪️ fwd sgps\n▪️ فروارد پیام مورد نظر به سوپرگروه ها\n▪️▪️برروی پیام مورد نظر ریپلای کنید\n➖➖➖➖➖➖➖➖\n▪️ fwd gps\n▪️ فروارد پیام مورد نظر به گروه ها\n▪️▪️برروی پیام مورد نظر ریپلای کنید\n➖➖➖➖➖➖➖➖\n▪️ fwd users\n▪️ فروارد پیام مورد نظر به پی وی ها\n▪️▪️برروی پیام مورد نظر ریپلای کنید\n➖➖➖➖➖➖➖➖\n▪️ addall userid  \n▪️ اد کردن کاربر مورد نظر به تمام گروه ها\n▪️▪️به جای USERID , یوزر آیدی فرد مورد نظر خود را بگذارید .\n➖➖➖➖➖➖➖➖\n▪️ setsudo userid\n▪️ ترفیع کاربر مورد نظر به مدیر\n▪️▪️به جای USERID , یوزر آیدی فرد مورد نظر خود را بگذارید .\n➖➖➖➖➖➖➖➖\n▪️ demsudo userid \n▪️  تنزیل کاربر مورد نظر\n▪️▪️به جای USERID , یوزر آیدی فرد مورد نظر خود را بگذارید .\n➖➖➖➖➖➖➖➖\n▪️ online                \n▪️ چک کردن انلاین بودن ربات\n➖➖➖➖➖➖➖➖\n▪️ reload                 \n▪️ بارگذاری مجدد\n➖➖➖➖➖➖➖➖\n▪️ reset stats\n▪️ بازنشانی امار ربات\n➖➖➖➖➖➖➖➖\n▪️ leave gps/sgps\n▪️ ترک کردن تمامی گروه ها/سوپرگروه ها\n➖➖➖➖➖➖➖➖\n▪️ info\n▪️ دریافت آمار , وضعیت و مشخصات ربات\n➖➖➖➖➖➖➖➖\n▪️ " .. channel_user .. ""
+      local Done = "<i>⇜ Done .</i>"
+      local Reload = "⇜ done .\n⇜ File is <code>Tabchi-RD.lua</code> Succssefully updated! ."
+      local off = "⇜ انجام شد .\n⇜ ربات به مدت <code>TIME</code> ثانیه خاموش شد !"
+      local forcejointxt = {
+        "عزیزم اول تو کانالم عضو شو بعد بیا بحرفیم😃❤️\nآیدی کانالم :\n" .. channel_user,
+        "عه هنوز تو کانالم نیستی🙁\nاول بیا کانالم بعد بیا چت کنیم😍❤️\nآیدی کانالم :\n" .. channel_user,
+        "عشقم اول بیا کانالم بعد بیا پی وی حرف بزنیم☺️\nاومدی بگو 😃❤️\nآیدی کانالم :\n" .. channel_user
+      }
+      local forcejoin = forcejointxt[math.random(#forcejointxt)]
+      local joinon = "Auto Join has been activated!"
+      local joinoff = "Auto Join has been deactivated!"
+      local info = "<i>Stats & BoT Info</i>\n➖➖➖➖➖➖➖➖\n<b>•⇩ Stats ⇩•</b>\n\n• Channels : <code>CH</code>\n• SuperGroups : <code>SU</code>\n• Groups : <code>GP</code>\n• Total users : <code>USR</code>\n➖➖➖➖➖➖➖➖\n<b>•⇩ Info ⇩•</b>\n• Ghost Mode : <code>MR</code>\n• AutoJoin : <code>JO</code>\n• Joined Links : <code>JL</code>\n• Waiting links to Join : <code>WA</code>\n• Force Join : <code>JE</code>\n• Channel Force Join : <code>" .. channel_user .. "</code>\n• Auto Forward time : <code>FW</code>\n• Waiting Baners : <code>PAF</code>\n• Path of Forwards : <code>MAF</code>\n➖➖➖➖➖➖➖➖\n<b>•⇩ About ⇩•</b>\n\n• BotID : <code>BOT</code>\n• Botname : <code> Bibak </code>\n• UserID  : <code> ID </code>\n• Bot Phone : <code> +PH </code>\n➖➖➖➖➖➖➖➖"
+      local Addall2 = "کاربر مورد نظر درحال افزودن به GP گروه و سوپرگروه می باشد !"
+      local Fwd2 = "Your message will be forward to all !"
+      local Fwdgp = "Your message will forward to Groups !"
+      local Fwdusers = "You message will be forward to PV users !"
+      local Fwdsgp = "You message will be forward to SuperGroups !"
+      local demsudo = "The user has been removed from admin list !"
+      local setsudo = "The user has been added to admin list !"
+      local rs = "Your bot has been reloaded !"
+      local forceon = "Force Join is activated"
+      local forceoff = "Force Join is deactivated"
+      local markon = "Ghost Mode is deactivated"
+      local markoff = "Ghost Mode is activated"
+      local addcontactson = "ذخیره شماره ها فعال شد"
+      local addcontactsoff = "ذخیره شماره ها غیر فعال شد"
+      local forceoff = "Force Join is deactivated"
+      local gpleave = "• Bot leaved <code>GP</code> ."
+      local chleave = "• Bot left from <code>CH</code>  ."
+      local sgpleave = "• Bot left from <code>SGP</code>  ."
+      local Online = "Tired but online💣"
+      if is_bibak(msg) then
+        find_link(text)
+        if text:match("^(botoff) (%d+)$") then
+          print("\n\027[36m>>\027[31m Tabchi Has Been Offlined For " .. tonumber(text:match("%d+")) .. " Sec ! \027[36m<<\027")
+          local matches = tonumber(text:match("%d+"))
+          DataBase:setex("bibak" .. BOT .. "OFFTIME", matches, true)
+          tdbot_function({
+            ["@type"] = "setAlarm",
+            seconds = matches
+          }, OffExpire, msg)
+          local text = off:gsub("TIME", matches)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^(setcount) (off)$") then
+          DataBase:del("bibak" .. BOT .. "joincount")
+          return SendMsg(msg.chat_id, msg.id, "Limit for join has been disabled")
+        elseif text:match("^(setcount) (%d+)$") then
+          local matches = tonumber(text:match("^setcount (%d+)$"))
+          DataBase:set("bibak" .. BOT .. "joincount", matches)
+          return SendMsg(msg.chat_id, msg.id, "From now i will not join the groups which has less than " .. matches .. " members")
+        elseif text:match("^(setbadname) (.+)$") then
+          local matches = text:match("^setbadname (.+)$"):lower()
+          if DataBase:sismember("bibak" .. BOT .. "badnames", matches) then
+            return SendMsg(msg.chat_id, msg.id, "<i>That word is already in blacklist.</i>")
+          else
+            DataBase:sadd("bibak" .. BOT .. "badnames", matches)
+            return SendMsg(msg.chat_id, msg.id, "Added to blacklist")
+          end
+        elseif text:match("^(rembadname) (.+)$") then
+          local matches = text:match("^rembadname (.+)$"):lower()
+          if not DataBase:sismember("bibak" .. BOT .. "badnames", matches) then
+            return SendMsg(msg.chat_id, msg.id, "<i>That word was not in blacklist.</i>")
+          else
+            DataBase:srem("bibak" .. BOT .. "badnames", matches)
+            return SendMsg(msg.chat_id, msg.id, "Deleted frol blacklist")
+          end
+        elseif text:match("^(listbadnames)$") then
+          return SendMsg(msg.chat_id, msg.id, "BlackList :\n" .. table.concat(DataBase:smembers("bibak" .. BOT .. "badnames"), "\n"))
+        elseif text:match("^(setautofwd) (off)$") then
+          DataBase:del("bibak" .. BOT .. "autofwdlimittime")
+          DataBase:set("bibak" .. BOT .. "autofwdlimit", true)
+          return SendMsg(msg.chat_id, msg.id, "AutoForward has been disabled")
+        elseif text:match("^(setautofwd) (%d+)$") then
+          local fwdtime = tonumber(text:match("%d+"))
+          DataBase:set("bibak" .. BOT .. "autofwdlimittime", fwdtime)
+          DataBase:setex("bibak" .. BOT .. "autofwdlimit", fwdtime, true)
+          return SendMsg(msg.chat_id, msg.id, "AutoForward time has been changed to " .. fwdtime .. " & ")
+        elseif text:match("^(setautofwdtype) (.+)$") then
+          local autofwdtype = ""
+          local stext = ""
+          local aftype = text:match("^setautofwdtype (.+)$")
+          if aftype:match("user") then
+            stext = stext .. "Users "
+            autofwdtype = autofwdtype .. "user"
+          end
+          if aftype:match("gp") then
+            stext = stext .. "groups "
+            autofwdtype = autofwdtype .. "gp"
+          end
+          if aftype:match("sgp") then
+            stext = stext .. "SuperGroups "
+            autofwdtype = autofwdtype .. "sgp"
+          end
+          if autofwdtype == "" then
+            return SendMsg(msg.chat_id, msg.id, "Please choose one of the option blew and than send me than the command again: user/gps/sgps")
+          else
+            DataBase:set("bibak" .. BOT .. "autofwdtype", autofwdtype)
+            return SendMsg(msg.chat_id, msg.id, "From now the autolist will be sne to: " .. stext .. " &")
+          end
+        elseif text:match("^(addautofwd)$") and msg.reply_to_message_id ~= 0 then
+          local post_data = msg.reply_to_message_id .. ":" .. msg.chat_id
+          if not DataBase:sismember("bibak" .. BOT .. "autofwdlist", post_data) then
+            DataBase:sadd("bibak" .. BOT .. "autofwdlist", post_data)
+            return SendMsg(msg.chat_id, msg.id, "Added to AutoForward list")
+          else
+            return SendMsg(msg.chat_id, msg.id, "That post is already in waiting list")
+          end
+        elseif text:match("^(remautofwd)$") and msg.reply_to_message_id ~= 0 then
+          local post_data = msg.reply_to_message_id .. ":" .. msg.chat_id
+          if DataBase:sismember("bibak" .. BOT .. "autofwdlist", post_data) then
+            DataBase:srem("bibak" .. BOT .. "autofwdlist", post_data)
+            return SendMsg(msg.chat_id, msg.id, "Your replayed post has been deleted from waiting list")
+          else
+            return SendMsg(msg.chat_id, msg.id, "That post is not in waiting list")
+          end
+        elseif text:match("^(autofwdlist)$") then
+          SendMsg(msg.chat_id, msg.id, "That are in waiting posts")
+          do
+            for _FORV_35_, _FORV_36_ in pairs(DataBase:smembers("bibak" .. BOT .. "autofwdlist")) do
+              local msg_id, chat_id = _FORV_36_:match("^(.+):(.+)$")
+              tdbot_function({
+                ["@type"] = "forwardMessages",
+                chat_id = msg.chat_id,
+                from_chat_id = chat_id,
+                message_ids = {
+                  [0] = msg_id
+                },
+                disable_notification = true,
+                from_background = true
+              }, dl_cb, nil)
+            end
+          end
+        elseif text:match("^(cleanautofwd)$") then
+          DataBase:del("bibak" .. BOT .. "autofwdlist")
+          return SendMsg(msg.chat_id, msg.id, "Forward list has been cleaned!")
+        elseif text:match("^(setsudo) (%d+)$") then
+          local matches = text:match("%d+")
+          if DataBase:sismember("bibak" .. BOT .. "admin", matches) then
+            return SendMsg(msg.chat_id, msg.id, "<i>The user a already an admin!.</i>")
+          elseif DataBase:sismember("bibak" .. BOT .. "mod", msg.sender_user_id) then
+            return SendMsg(msg.chat_id, msg.id, "You have not any accss!.")
+          else
+            print("\n\027[36m>>\027[32m User : " .. tonumber(text:match("%d+")) .. " Added To Sudoers ! \027[36m<<\027")
+            DataBase:sadd("bibak" .. BOT .. "admin", matches)
+            DataBase:sadd("bibak" .. BOT .. "mod", matches)
+            return SendMsg(msg.chat_id, msg.id, setsudo)
+          end
+        elseif text:match("^(demsudo) (%d+)$") then
+          local matches = text:match("%d+")
+          if DataBase:sismember("bibak" .. BOT .. "mod", msg.sender_user_id) then
+            if tonumber(matches) == msg.sender_user_id then
+              DataBase:srem("bibak" .. BOT .. "admin", msg.sender_user_id)
+              DataBase:srem("bibak" .. BOT .. "mod", msg.sender_user_id)
+              return SendMsg(msg.chat_id, msg.id, "You are not any more an admin!.")
+            end
+            return SendMsg(msg.chat_id, msg.id, "You have not any accss!.")
+          end
+          if DataBase:sismember("bibak" .. BOT .. "admin", matches) then
+            if DataBase:sismember("bibak" .. BOT .. "admin" .. msg.sender_user_id, matches) then
+              return SendMsg(msg.chat_id, msg.id, "You cannot delete that admin noob!😂.")
+            end
+            DataBase:srem("bibak" .. BOT .. "admin", matches)
+            DataBase:srem("bibak" .. BOT .. "mod", matches)
+            print("\n\027[36m>>\027[31m User : " .. tonumber(text:match("%d+")) .. " Remowed From Sudoers ! \027[36m<<\027")
+            return SendMsg(msg.chat_id, msg.id, demsudo)
+          end
+          return SendMsg(msg.chat_id, msg.id, "The user is not an admin!.")
+        elseif text:match("^(forcejoin on)$") then
+          DataBase:set("bibak" .. BOT .. "forcejoin", true)
+          return SendMsg(msg.chat_id, msg.id, forceon)
+        elseif text:match("^(forcejoin off)$") then
+          DataBase:del("bibak" .. BOT .. "forcejoin")
+          return SendMsg(msg.chat_id, msg.id, forceoff)
+        elseif text:match("^(markread on)$") then
+          DataBase:set("bibak" .. BOT .. "markread", true)
+          return SendMsg(msg.chat_id, msg.id, markon)
+        elseif text:match("^(markread off)$") then
+          DataBase:del("bibak" .. BOT .. "forcejoin")
+          return SendMsg(msg.chat_id, msg.id, markoff)
+        elseif text:match("^(setaddcontacts) (.+)$") then
+          local act = text:match("^setaddcontacts (.+)$")
+          if act == "off" then
+            DataBase:del("bibak" .. BOT .. "addcontactstext")
+            return SendMsg(msg.chat_id, msg.id, "پیام ادد کنتاکت حذف شد")
+          else
+            DataBase:set("bibak" .. BOT .. "addcontactstext", act)
+            return SendMsg(msg.chat_id, msg.id, "پیام ادد کنتاکت به \"" .. act .. "\" تنظیم شد")
+          end
+        elseif text:match("^(addc)$") and msg.reply_to_message_id ~= 0 then
+          function addc(extera, msg)
+            if msg.content["@type"] == "messageContact" and not DataBase:sismember("bibak" .. BOT .. "contacts", msg.content.contact.user_id) then
+              tdbot_function({
+                ["@type"] = "importContacts",
+                contacts = {
+                  [0] = msg.content.contact
+                }
+              }, dl_cb, nil)
+              DataBase:sadd("bibak" .. BOT .. "contacts", msg.content.contact.user_id)
+              return SendMsg(msg.chat_id, msg.id, "ادد شد!")
+            end
+          end
+          
+          tdbot_function({
+            ["@type"] = "getMessage",
+            chat_id = msg.chat_id,
+            message_id = msg.reply_to_message_id
+          }, addc, nil)
+        elseif text:match("^(update)$") then
+          local checkupdate_curl = io.popen("curl https://amirbibak.hostech.ir/checkupdate.php?version=" .. VERSION)
+          local update = tonumber(checkupdate_curl:read("*all"))
+          checkupdate_curl:close()
+          if update == 1 then
+            io.popen("wget https://amirbibak.hostech.ir/Tabchi.bin"):close()
+            return SendMsg(msg.chat_id, msg.id, "اپدیت شد برای اعمال ریستارت نمایید!")
+          else
+            return SendMsg(msg.chat_id, msg.id, "اپدیتی موجود نیست!")
+          end
+        elseif text:match("^(addmembers)$") then
+          do
+            do
+              for _FORV_35_, _FORV_36_ in pairs(DataBase:smembers("bibak" .. BOT .. "users")) do
+                tdbot_function({
+                  ["@type"] = "addChatMember",
+                  chat_id = msg.chat_id,
+                  user_id = _FORV_36_
+                }, dl_cb, nil)
+              end
+            end
+          end
+          function contacts_cb2(kir, data)
+            tdbot_function({
+              ["@type"] = "addChatMember",
+              chat_id = msg.chat_id,
+              user_id = v
+            }, dl_cb, nil)
+          end
+          
+          tdbot_function({
+            ["@type"] = "searchContacts",
+            query = "",
+            limit = "999999"
+          }, contacts_cb2, nil)
+        elseif text:match("^(addcontacts on)$") then
+          DataBase:set("bibak" .. BOT .. "addcontacts", true)
+          return SendMsg(msg.chat_id, msg.id, addcontactson)
+        elseif text:match("^(addcontacts off)$") then
+          DataBase:del("bibak" .. BOT .. "addcontacts")
+          return SendMsg(msg.chat_id, msg.id, addcontactsoff)
+        elseif text:match("^(autojoin on)$") then
+          print("\n\027[36m>>\027[32m AutoJoin Has Been Enabled Now ! \027[36m<<\027")
+          DataBase:del("bibak" .. BOT .. "maxjoin")
+          DataBase:del("bibak" .. BOT .. "offjoin")
+          DataBase:set("bibak" .. BOT .. "link", true)
+          return SendMsg(msg.chat_id, msg.id, joinon)
+        elseif text:match("^(autojoin off)$") then
+          print("\n\027[36m>>\027[31m AutoJoin Has Been Disabled Now ! \027[36m<<\027")
+          DataBase:set("bibak" .. BOT .. "maxjoin", true)
+          DataBase:set("bibak" .. BOT .. "offjoin", true)
+          DataBase:del("bibak" .. BOT .. "link")
+          return SendMsg(msg.chat_id, msg.id, joinoff)
+        elseif text:match("^(online)$") and not msg.forward_info then
+          print("\n\027[36m>>\027[32m Online ! \027[36m<<\027")
+          return SendMsg(msg.chat_id, msg.id, Online)
+        elseif text:match("^(reset stats)$") then
+          print("\n\027[36m>>\027[32m Reseting Stats ... ! \027[36m<<\027")
+          reset_status()
+          SendMsg(msg.chat_id, msg.id, rs)
+        elseif text:match("^(getlinks)$") then
+          print("\n\027[36m>>\027[32m Collecting links ! \027[36m<<\027")
+          local path = os.tmpname()
+          local lfile = io.open(path, "w+")
+          local count = 0
+          do
+            do
+              for _FORV_38_, _FORV_39_ in pairs(DataBase:smembers("bibak" .. BOT .. "alllinks")) do
+                count = count + 1
+                lfile:write(_FORV_39_ .. "\n")
+              end
+            end
+          end
+          lfile:close()
+          tdbot_function({
+            ["@type"] = "sendChatAction",
+            chat_id = msg.chat_id,
+            action = {
+              ["@type"] = "chatActionUploadingDocument",
+              progress = 100
+            }
+          }, dl_cb, nil)
+          tdbot_function({
+            ["@type"] = "sendMessage",
+            chat_id = msg.chat_id,
+            reply_to_message_id = msg.id,
+            disable_notification = true,
+            from_background = true,
+            reply_markup = nil,
+            input_message_content = {
+              ["@type"] = "inputMessageDocument",
+              document = {
+                ["@type"] = "inputFileLocal",
+                path = path
+              },
+              thumbnail = nil,
+              caption = {
+                ["@type"] = "formattedText",
+                text = count .. " All of the links",
+                entities = {}
+              }
+            }
+          }, dl_cb, nil)
+          os.remove(path)
+        elseif text:match("^(resetlinks)$") then
+          DataBase:del("bibak" .. BOT .. "alllinks")
+          DataBase:del("bibak" .. BOT .. "savedlinks")
+          DataBase:del("bibak" .. BOT .. "waitelinks")
+          return SendMsg(msg.chat_id, msg.id, "All of the links has been deleted!")
+        elseif text:match("^(share)$") then
+          print("\n\027[36m>>\027[32m Share Tabchi Phone ! \027[36m<<\027")
+          get_bot()
+          local fname = DataBase:get("bibak" .. BOT .. "fname")
+          local lnasme = DataBase:get("bibak" .. BOT .. "lname") or ""
+          local num = DataBase:get("bibak" .. BOT .. "num")
+          tdbot_function({
+            ["@type"] = "sendMessage",
+            chat_id = msg.chat_id,
+            reply_to_message_id = msg.id,
+            disable_notification = true,
+            from_background = true,
+            reply_markup = nil,
+            input_message_content = {
+              ["@type"] = "inputMessageContact",
+              contact = {
+                ["@type"] = "Contact",
+                phone_number = num,
+                first_name = fname,
+                last_name = lname,
+                user_id = bot_id
+              }
+            }
+          }, dl_cb, nil)
+        elseif text:match("^(info)$") then
+          print("\n\027[36m>>\027[32m Get Tabchi Info ! \027[36m<<\027")
+          get_bot()
+          local botname = DataBase:get("bibak" .. BOT .. "fname")
+          local botphone = DataBase:get("bibak" .. BOT .. "num")
+          local botuser = DataBase:get("bibak" .. BOT .. "id")
+          local offjoin = DataBase:get("bibak" .. BOT .. "offjoin") and "disable" or "enable"
+          local forcejoin = DataBase:get("bibak" .. BOT .. "forcejoin") and "enable" or "disable"
+          local markread = DataBase:get("bibak" .. BOT .. "markread") and "disable" or "enable"
+          local fwauto = DataBase:get("bibak" .. BOT .. "autofwdlimittime")
+          if fwauto then
+            fwauto = "هر " .. fwauto .. " ثانیه"
+          else
+            fwauto = "خاموش"
+          end
+          local stext = ""
+          local aftype = DataBase:get("bibak" .. BOT .. "autofwdtype") or "user gp sgp"
+          if aftype:match("user") then
+            stext = stext .. "کاربران "
+          end
+          if aftype:match("gp") then
+            stext = stext .. "groups "
+          end
+          if aftype:match("sgp") then
+            stext = stext .. "SuperGroups "
+          end
+          local gps = tostring(DataBase:scard("bibak" .. BOT .. "groups"))
+          local sgps = tostring(DataBase:scard("bibak" .. BOT .. "supergroups"))
+          local links = tostring(DataBase:scard("bibak" .. BOT .. "savedlinks"))
+          local glinks = tostring(DataBase:scard("bibak" .. BOT .. "goodlinks"))
+          local usrs = tostring(DataBase:scard("bibak" .. BOT .. "users"))
+          local chns = tostring(DataBase:scard("bibak" .. BOT .. "channels"))
+          local text = info:gsub("JE", forcejoin):gsub("MR", markread):gsub("GP", gps):gsub("USR", usrs):gsub("CH", chns):gsub("SU", sgps):gsub("JL", links):gsub("WA", glinks):gsub("PH", botphone):gsub("Bibak", botname):gsub("ID", botuser):gsub("JO", offjoin):gsub("BOT", BOT):gsub("FORCE", forcejoin):gsub("CHANNL", channel_user):gsub("FW", fwauto):gsub("PAF", DataBase:scard("bibak" .. BOT .. "autofwdlist")):gsub("MAF", stext)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^(fwd all)$") and msg.reply_to_message_id ~= 0 then
+          print("\n\027[36m>>\027[32m Fwd Msg To All ... ! \027[36m<<\027")
+          local bibak = "bibak" .. BOT .. "all"
+          local list = DataBase:smembers(bibak)
+          local id = msg.reply_to_message_id
+          do
+            do
+              for _FORV_38_, _FORV_39_ in pairs(list) do
+                tdbot_function({
+                  ["@type"] = "forwardMessages",
+                  chat_id = _FORV_39_,
+                  from_chat_id = msg.chat_id,
+                  message_ids = {
+                    [0] = id
+                  },
+                  disable_notification = true,
+                  from_background = true
+                }, dl_cb, nil)
+              end
+            end
+          end
+          local gps = tostring(DataBase:scard("bibak" .. BOT .. "groups"))
+          local sgps = tostring(DataBase:scard("bibak" .. BOT .. "supergroups"))
+          local users = tostring(DataBase:scard("bibak" .. BOT .. "users"))
+          local text = Fwd2:gsub("GROUP", gps):gsub("SUPER", sgps):gsub("USER", users)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^(fwd gps)$") and msg.reply_to_message_id ~= 0 then
+          print("\n\027[36m>>\027[32m Fwd Msg To Groups ... ! \027[36m<<\027")
+          local bibak = "bibak" .. BOT .. "groups"
+          local list = DataBase:smembers(bibak)
+          local id = msg.reply_to_message_id
+          do
+            do
+              for _FORV_38_, _FORV_39_ in pairs(list) do
+                tdbot_function({
+                  ["@type"] = "forwardMessages",
+                  chat_id = _FORV_39_,
+                  from_chat_id = msg.chat_id,
+                  message_ids = {
+                    [0] = id
+                  },
+                  disable_notification = true,
+                  from_background = true
+                }, dl_cb, nil)
+              end
+            end
+          end
+          local gps = tostring(DataBase:scard("bibak" .. BOT .. "groups"))
+          local text = Fwdgp:gsub("GROUP", gps)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^(fwd sgps)$") and msg.reply_to_message_id ~= 0 then
+          print("\n\027[36m>>\027[32m Fwd Msg To SuperGroups ... ! \027[36m<<\027")
+          local bibak = "bibak" .. BOT .. "supergroups"
+          local list = DataBase:smembers(bibak)
+          local id = msg.reply_to_message_id
+          do
+            do
+              for _FORV_38_, _FORV_39_ in pairs(list) do
+                tdbot_function({
+                  ["@type"] = "forwardMessages",
+                  chat_id = _FORV_39_,
+                  from_chat_id = msg.chat_id,
+                  message_ids = {
+                    [0] = id
+                  },
+                  disable_notification = true,
+                  from_background = true
+                }, dl_cb, nil)
+              end
+            end
+          end
+          local sgps = tostring(DataBase:scard("bibak" .. BOT .. "supergroups"))
+          local text = Fwdsgp:gsub("SUPER", sgps)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^(fwd users)$") and msg.reply_to_message_id ~= 0 then
+          print("\n\027[36m>>\027[32m Fwd Msg To Users ... ! \027[36m<<\027")
+          local bibak = "bibak" .. BOT .. "users"
+          local list = DataBase:smembers(bibak)
+          local id = msg.reply_to_message_id
+          do
+            do
+              for _FORV_38_, _FORV_39_ in pairs(list) do
+                tdbot_function({
+                  ["@type"] = "forwardMessages",
+                  chat_id = _FORV_39_,
+                  from_chat_id = msg.chat_id,
+                  message_ids = {
+                    [0] = id
+                  },
+                  disable_notification = true,
+                  from_background = true
+                }, dl_cb, nil)
+              end
+            end
+          end
+          local users = tostring(DataBase:scard("bibak" .. BOT .. "users"))
+          local text = Fwdusers:gsub("USER", users)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^(addall) (%d+)$") then
+          print("\n\027[36m>>\027[32m Addall To All Groups ... ! \027[36m<<\027")
+          local matches = text:match("%d+")
+          local list = {
+            DataBase:smembers("bibak" .. BOT .. "groups"),
+            DataBase:smembers("bibak" .. BOT .. "supergroups")
+          }
+          do
+            do
+              for _FORV_37_, _FORV_38_ in pairs(list) do
+                do
+                  for _FORV_42_, _FORV_43_ in pairs(_FORV_38_) do
+                    tdbot_function({
+                      ["@type"] = "addChatMember",
+                      chat_id = _FORV_43_,
+                      user_id = matches,
+                      forward_limit = 50
+                    }, dl_cb, nil)
+                  end
+                end
+              end
+            end
+          end
+          local gps = tostring(DataBase:scard("bibak" .. BOT .. "groups"))
+          local sgps = tostring(DataBase:scard("bibak" .. BOT .. "supergroups"))
+          local all = gps + sgps
+          local text = Addall2:gsub("GP", all)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^leave sgps") then
+          function lkj(arg, data)
+            bot_id = data.id
+            local list = DataBase:smembers("bibak" .. BOT .. "supergroups")
+            function lsgps(arg, data)
+              if data["@type"] ~= "Error" then
+                DataBase:srem("bibak" .. BOT .. "supergroups", arg)
+              end
+            end
+            
+            do
+              do
+                for _FORV_6_, _FORV_7_ in pairs(list) do
+                  tdbot_function({
+                    ["@type"] = "setChatMemberStatus",
+                    chat_id = _FORV_7_,
+                    user_id = bot_id,
+                    status = {
+                      ["@type"] = "chatMemberStatusLeft"
+                    }
+                  }, lspgs, _FORV_7_)
+                end
+              end
+            end
+          end
+          
+          tdbot_function({
+            ["@type"] = "getMe"
+          }, lkj, nil)
+          local before_count = tonumber(DataBase:scard("bibak" .. BOT .. "supergroups"))
+          local sgps = tostring(before_count - DataBase:scard("bibak" .. BOT .. "supergroups"))
+          local text = sgpleave:gsub("SGP", sgps)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^leave gps") then
+          function lkj(arg, data)
+            bot_id = data.id
+            local list = DataBase:smembers("bibak" .. BOT .. "groups")
+            function lsgps(arg, data)
+              if data["@type"] ~= "Error" then
+                DataBase:srem("bibak" .. BOT .. "groups", arg)
+              end
+            end
+            
+            do
+              do
+                for _FORV_6_, _FORV_7_ in pairs(list) do
+                  tdbot_function({
+                    ["@type"] = "changeChatMemberStatus",
+                    chat_id = _FORV_7_,
+                    user_id = bot_id,
+                    status = {
+                      ["@type"] = "chatMemberStatusLeft"
+                    }
+                  }, lgps, _FORV_7_)
+                end
+              end
+            end
+          end
+          
+          tdbot_function({
+            ["@type"] = "getMe"
+          }, lkj, nil)
+          local before_count = tonumber(DataBase:scard("bibak" .. BOT .. "groups"))
+          local gps = tostring(DataBase:scard("bibak" .. BOT .. "groups"))
+          local text = gpleave:gsub("GP", gps)
+          return SendMsg(msg.chat_id, msg.id, text)
+        elseif text:match("^leave channels") then
+          function lkj(arg, data)
+            bot_id = data.id
+            local list = DataBase:smembers("bibak" .. BOT .. "channels")
+            local before_count = tonumber(DataBase:scard("bibak" .. BOT .. "channels"))
+            function lsgps(arg, data)
+              if data["@type"] ~= "Error" then
+                DataBase:srem("bibak" .. BOT .. "channels", arg)
+              end
+            end
+            
+            do
+              do
+                for _FORV_7_, _FORV_8_ in pairs(list) do
+                  tdbot_function({
+                    ["@type"] = "changeChatMemberStatus",
+                    chat_id = _FORV_8_,
+                    user_id = bot_id,
+                    status = {
+                      ["@type"] = "chatMemberStatusLeft"
+                    }
+                  }, lgps, _FORV_8_)
+                end
+              end
+            end
+          end
+          
+          tdbot_function({
+            ["@type"] = "getMe"
+          }, lkj, nil)
+          local gps = tostring(DataBase:scard("bibak" .. BOT .. "channels"))
+          local text = chleave:gsub("CH", gps)
+          return SendMsg(msg.chat_id, msg.id, text)
+        end
+      end
+    elseif msg.content["@type"] == "messageChatDeleteMember" and tonumber(msg.content.user_id) == tonumber(bot_id) then
+      return rem(msg.chat_id)
+    elseif msg.content.caption and DataBase:get("bibak" .. BOT .. "link") then
+      find_link(msg.content.caption.text)
+    end
+  end
+end
+
